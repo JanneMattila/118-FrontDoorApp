@@ -1,0 +1,11 @@
+{
+    "name": "contosoglobal",
+    "description": "Simple app to demonstrate Azure Front Door usage",
+    "version": "1.0.0",
+    "private": true,
+    "license": "MIT",
+    "author": "Janne Mattila",
+    "scripts": {
+        "start": "node index.js"
+    }
+}

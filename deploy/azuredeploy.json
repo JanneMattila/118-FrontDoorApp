@@ -1,0 +1,278 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "frontDoorName": {
+      "type": "string",
+      "metadata": {
+        "description": "Front door name."
+      }
+    },
+    "appServicePlanSkuName": {
+      "type": "string",
+      "allowedValues": [
+        "F1",
+        "B1",
+        "B2",
+        "B3",
+        "S1",
+        "S2",
+        "S3",
+        "P1",
+        "P2",
+        "P3",
+        "P1v2",
+        "P2v2",
+        "P3v2"
+      ],
+      "metadata": {
+        "description": "App Service Plan's Pricing tier and instance size. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/"
+      }
+    },
+    "appServicePlanInstances": {
+      "type": "int",
+      "minValue": 1,
+      "metadata": {
+        "description": "App Service Plan's instance count"
+      }
+    },
+    "location1": {
+      "type": "string",
+      "defaultValue": "North Europe",
+      "metadata": {
+        "description": "Location for cluster1."
+      }
+    },
+    "location2": {
+      "type": "string",
+      "defaultValue": "West Europe",
+      "metadata": {
+        "description": "Location for cluster2."
+      }
+    }
+  },
+  "variables": {
+    "nodeVersion": "10.14.1",
+    "appName": "contosohqlocal",
+    "frontDoorIpRange": "147.243.0.0/16",
+    "frontdoorref": "[resourceId('Microsoft.Network/frontDoors', parameters('frontDoorName'))]",
+    "appServicePlanName1": "[concat(variables('appName'), 'AppServicePlan1')]",
+    "appServiceName1": "[concat(variables('appName'), '1', uniqueString(resourceGroup().id))]",
+    "appServicePlanName2": "[concat(variables('appName'), 'AppServicePlan2')]",
+    "appServiceName2": "[concat(variables('appName'), '2', uniqueString(resourceGroup().id))]"
+  },
+  "resources": [
+    {
+      "name": "[variables('appServicePlanName1')]",
+      "type": "Microsoft.Web/serverfarms",
+      "location": "[parameters('location1')]",
+      "apiVersion": "2018-02-01",
+      "sku": {
+        "name": "[parameters('appServicePlanSkuName')]",
+        "capacity": "[parameters('appServicePlanInstances')]"
+      }
+    },
+    {
+      "name": "[variables('appServiceName1')]",
+      "type": "Microsoft.Web/sites",
+      "location": "[parameters('location1')]",
+      "apiVersion": "2018-02-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName1'))]"
+      ],
+      "properties": {
+        "name": "[variables('appServiceName1')]",
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName1'))]",
+        "siteConfig": {
+          "ipSecurityRestrictions": [
+            {
+              "ipAddress": "[variables('frontDoorIpRange')]",
+              "action": "Allow",
+              "tag": "Default",
+              "priority": "100",
+              "name": "FrontDoorIpRange",
+              "description": "Azure Front Door Ip range"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "appsettings",
+          "type": "config",
+          "apiVersion": "2018-02-01",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', variables('appServiceName1'))]"
+          ],
+          "properties": {
+            "WEBSITE_NODE_DEFAULT_VERSION": "[variables('nodeVersion')]",
+            "WEBSITE_RUN_FROM_PACKAGE": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "[variables('appServicePlanName2')]",
+      "type": "Microsoft.Web/serverfarms",
+      "location": "[parameters('location2')]",
+      "apiVersion": "2018-02-01",
+      "sku": {
+        "name": "[parameters('appServicePlanSkuName')]",
+        "capacity": "[parameters('appServicePlanInstances')]"
+      }
+    },
+    {
+      "name": "[variables('appServiceName2')]",
+      "type": "Microsoft.Web/sites",
+      "location": "[parameters('location2')]",
+      "apiVersion": "2018-02-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName2'))]"
+      ],
+      "properties": {
+        "name": "[variables('appServiceName2')]",
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName2'))]",
+        "siteConfig": {
+          "ipSecurityRestrictions": [
+            {
+              "ipAddress": "[variables('frontDoorIpRange')]",
+              "action": "Allow",
+              "tag": "Default",
+              "priority": "100",
+              "name": "FrontDoorIpRange",
+              "description": "Azure Front Door Ip range"
+            }
+          ]
+        }
+      },
+      "resources": [
+        {
+          "name": "appsettings",
+          "type": "config",
+          "apiVersion": "2018-02-01",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', variables('appServiceName2'))]"
+          ],
+          "properties": {
+            "WEBSITE_NODE_DEFAULT_VERSION": "[variables('nodeVersion')]",
+            "WEBSITE_RUN_FROM_PACKAGE": "1"
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/frontDoors",
+      "name": "[parameters('frontDoorName')]",
+      "location": "global",
+      "tags": {},
+      "properties": {
+        "routingRules": [
+          {
+            "name": "routingRule1",
+            "properties": {
+              "frontendEndpoints": [
+                {
+                  "id": "[concat(variables('frontdoorref'),'/frontendEndpoints/frontendEndpoint1')]"
+                }
+              ],
+              "acceptedProtocols": [
+                "Http",
+                "Https"
+              ],
+              "patternsToMatch": [
+                "/*"
+              ],
+              "forwardingProtocol": "MatchRequest",
+              "backendPool": {
+                "id": "[concat(variables('frontdoorref'),'/backendPools/backendPool1')]"
+              },
+              "enabledState": "Enabled"
+            }
+          }
+        ],
+        "healthProbeSettings": [
+          {
+            "name": "healthProbeSettings1",
+            "properties": {
+              "path": "/",
+              "protocol": "Http",
+              "intervalInSeconds": 5
+            }
+          }
+        ],
+        "loadBalancingSettings": [
+          {
+            "name": "loadBalancingSettings1",
+            "properties": {
+              "sampleSize": 4,
+              "successfulSamplesRequired": 2
+            }
+          }
+        ],
+        "backendPools": [
+          {
+            "name": "backendPool1",
+            "properties": {
+              "backends": [
+                {
+                  "address": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName1'))).hostNames[0]]",
+                  "backendHostHeader": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName1'))).hostNames[0]]",
+                  "httpPort": 80,
+                  "httpsPort": 443,
+                  "weight": 50,
+                  "priority": 1,
+                  "enabledState": "Enabled"
+                },
+                {
+                  "address": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName2'))).hostNames[0]]",
+                  "backendHostHeader": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName2'))).hostNames[0]]",
+                  "httpPort": 80,
+                  "httpsPort": 443,
+                  "weight": 50,
+                  "priority": 1,
+                  "enabledState": "Enabled"
+                }
+              ],
+              "loadBalancingSettings": {
+                "id": "[concat(variables('frontdoorref'),'/loadBalancingSettings/loadBalancingSettings1')]"
+              },
+              "healthProbeSettings": {
+                "id": "[concat(variables('frontdoorref'),'/healthProbeSettings/healthProbeSettings1')]"
+              }
+            }
+          }
+        ],
+        "frontendEndpoints": [
+          {
+            "name": "frontendEndpoint1",
+            "properties": {
+              "hostName": "[concat(parameters('frontDoorName'), '.azurefd.net')]",
+              "sessionAffinityEnabledState": "Disabled",
+              "sessionAffinityTtlSeconds": 0
+            }
+          }
+        ],
+        "enabledState": "Enabled"
+      }
+    }
+  ],
+  "outputs": {
+    "webAppName1": {
+      "type": "string",
+      "value": "[variables('appServiceName1')]"
+    },
+    "webAppUri1": {
+      "type": "string",
+      "value": "[concat('http://',reference(resourceId('Microsoft.Web/sites', variables('appServiceName1'))).hostNames[0])]"
+    },
+    "webAppName2": {
+      "type": "string",
+      "value": "[variables('appServiceName2')]"
+    },
+    "webAppUri2": {
+      "type": "string",
+      "value": "[concat('http://',reference(resourceId('Microsoft.Web/sites', variables('appServiceName2'))).hostNames[0])]"
+    }
+  }
+}
